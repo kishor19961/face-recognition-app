@@ -27,19 +27,16 @@ s3 = boto3.client('s3', **get_aws_credentials())
 
 BUCKET_NAME = os.environ.get('S3_BUCKET_NAME', 'newawignbucket')
 
-def list_files_in_bucket():
-    """List all files in the index folder of the S3 bucket"""
+def get_all_faces_in_collection():
+    """Get all faces from the Rekognition collection"""
     try:
-        response = s3.list_objects_v2(
-            Bucket=BUCKET_NAME,
-            Prefix='index/'
-        )
-        # Filter out the directory entry and return only files
-        files = [item['Key'] for item in response.get('Contents', []) 
-                if not item['Key'].endswith('/')]
-        return files
+        faces = []
+        paginator = rekognition.get_paginator('list_faces')
+        for page in paginator.paginate(CollectionId='facerecognition_collection'):
+            faces.extend(page['Faces'])
+        return faces
     except Exception as e:
-        logger.error(f"Error listing bucket contents: {str(e)}")
+        logger.error(f"Error getting faces from collection: {str(e)}")
         return []
 
 @app.route('/')
@@ -71,7 +68,7 @@ def upload():
         image_bytes = base64.b64decode(photo_data)
         
         try:
-            # Search for similar faces in the S3 bucket
+            # Search for similar faces in the collection
             logger.info("Searching for similar faces...")
             response = rekognition.search_faces_by_image(
                 CollectionId='facerecognition_collection',
@@ -88,69 +85,81 @@ def upload():
                 match = True
                 confidence = response['FaceMatches'][0]['Similarity']
                 face_id = response['FaceMatches'][0]['Face']['FaceId']
-                image_id = response['FaceMatches'][0]['Face']['ImageId']
-                external_image_id = response['FaceMatches'][0]['Face']['ExternalImageId']
                 
                 try:
-                    # List all files in the bucket's index folder
-                    s3_files = list_files_in_bucket()
+                    # List objects in the S3 bucket's index folder
+                    response = s3.list_objects_v2(
+                        Bucket=BUCKET_NAME,
+                        Prefix='index/'
+                    )
+                    
+                    s3_files = [item['Key'] for item in response.get('Contents', []) 
+                              if not item['Key'].endswith('/')]
                     logger.info(f"Files in S3 bucket: {s3_files}")
                     
                     matched_image_base64 = None
                     metadata = {}
-                    s3_key = None
                     
-                    # Find the matching file based on ExternalImageId
-                    for file_key in s3_files:
-                        base_name = os.path.splitext(os.path.basename(file_key))[0]
-                        # Remove .jpg if it's part of the base name
-                        base_name = base_name.replace('.jpg', '')
-                        
-                        if base_name.lower() == external_image_id.lower().replace('1', ''):
-                            s3_key = file_key
-                            break
-                    
-                    if s3_key:
-                        logger.info(f"Found matching file: {s3_key}")
+                    # Try each file in S3
+                    for s3_key in s3_files:
                         try:
-                            # Get metadata and image
-                            metadata_response = s3.head_object(
-                                Bucket=BUCKET_NAME,
-                                Key=s3_key
-                            )
-                            metadata = metadata_response.get('Metadata', {})
-                            
-                            # Get the image
+                            # Get the image from S3
                             s3_response = s3.get_object(
                                 Bucket=BUCKET_NAME,
                                 Key=s3_key
                             )
-                            matched_image_bytes = s3_response['Body'].read()
-                            matched_image_base64 = base64.b64encode(matched_image_bytes).decode('utf-8')
-                            logger.info(f"Successfully retrieved image and metadata with key: {s3_key}")
+                            image_bytes = s3_response['Body'].read()
+                            
+                            # Detect faces in this S3 image
+                            detect_response = rekognition.detect_faces(
+                                Image={
+                                    'Bytes': image_bytes
+                                },
+                                Attributes=['DEFAULT']
+                            )
+                            
+                            if detect_response['FaceDetails']:
+                                # Search for faces in the collection that match this image
+                                search_response = rekognition.search_faces_by_image(
+                                    CollectionId='facerecognition_collection',
+                                    Image={
+                                        'Bytes': image_bytes
+                                    },
+                                    MaxFaces=1,
+                                    FaceMatchThreshold=70
+                                )
+                                
+                                if search_response['FaceMatches']:
+                                    matched_face_id = search_response['FaceMatches'][0]['Face']['FaceId']
+                                    
+                                    # If this image contains our target face
+                                    if matched_face_id == face_id:
+                                        logger.info(f"Found matching image: {s3_key}")
+                                        matched_image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+                                        
+                                        # Get metadata
+                                        metadata_response = s3.head_object(
+                                            Bucket=BUCKET_NAME,
+                                            Key=s3_key
+                                        )
+                                        metadata = metadata_response.get('Metadata', {})
+                                        metadata.update({
+                                            'FileName': s3_key,
+                                            'FaceId': face_id,
+                                            'MatchConfidence': f"{confidence:.2f}%"
+                                        })
+                                        break
                             
                         except ClientError as e:
-                            logger.error(f"Error accessing S3 object: {str(e)}")
-                    else:
-                        logger.error("No matching file found in S3")
+                            logger.error(f"Error processing {s3_key}: {str(e)}")
+                            continue
                     
-                    # Add face information to metadata
-                    metadata.update({
-                        'FaceId': face_id,
-                        'ImageId': image_id,
-                        'ExternalImageId': external_image_id,
-                        'S3Key': s3_key if s3_key else 'Not found',
-                        'MatchConfidence': f"{confidence:.2f}%"
-                    })
-                        
                 except ClientError as e:
                     logger.error(f"Error accessing S3: {str(e)}")
                     metadata = {
                         'FaceId': face_id,
-                        'ImageId': image_id,
-                        'ExternalImageId': external_image_id,
                         'Confidence': str(confidence),
-                        'Note': 'Original image not found in S3'
+                        'Note': 'Error accessing S3'
                     }
                     matched_image_base64 = None
             else:
