@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Face Recognition</title>
     <style>
         body {
@@ -28,15 +29,38 @@
             color: white;
             border: none;
             cursor: pointer;
+            margin: 5px;
         }
         button:hover {
             background-color: #45a049;
+        }
+        #camera-container {
+            margin: 20px 0;
+            max-width: 400px;
+        }
+        #video {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        #canvas {
+            display: none;
+        }
+        #preview {
+            max-width: 100%;
+            margin: 10px 0;
+            display: none;
+        }
+        .camera-buttons {
+            margin: 10px 0;
+        }
+        .hidden {
+            display: none;
         }
     </style>
 </head>
 <body>
     <h1>Face Recognition Form</h1>
-    <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+    <form id="recognitionForm" action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
         <div class="form-group">
             <label for="guard_id">Guard ID:</label>
             <input type="text" id="guard_id" name="guard_id" required>
@@ -47,12 +71,110 @@
             <input type="text" id="workforce_id" name="workforce_id" required>
         </div>
         
-        <div class="form-group">
-            <label for="photo">Capture Photo:</label>
-            <input type="file" id="photo" name="photo" accept="image/*" capture="camera" required>
+        <div id="camera-container">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas"></canvas>
+            <img id="preview" alt="Captured photo">
+            <input type="hidden" id="photo" name="photo">
+            
+            <div class="camera-buttons">
+                <button type="button" id="startCamera">Start Camera</button>
+                <button type="button" id="capturePhoto" disabled>Capture Photo</button>
+                <button type="button" id="retakePhoto" class="hidden">Retake Photo</button>
+            </div>
         </div>
         
-        <button type="submit">Submit</button>
+        <button type="submit" id="submitButton" disabled>Submit</button>
     </form>
+
+    <script>
+        let stream = null;
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const preview = document.getElementById('preview');
+        const startButton = document.getElementById('startCamera');
+        const captureButton = document.getElementById('capturePhoto');
+        const retakeButton = document.getElementById('retakePhoto');
+        const submitButton = document.getElementById('submitButton');
+        const photoInput = document.getElementById('photo');
+
+        startButton.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: "user",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                video.srcObject = stream;
+                startButton.disabled = true;
+                captureButton.disabled = false;
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                alert('Error accessing camera. Please make sure you have granted camera permissions.');
+            }
+        });
+
+        captureButton.addEventListener('click', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            // Convert canvas to blob and create a file
+            canvas.toBlob((blob) => {
+                const file = new File([blob], "captured-photo.jpg", { type: "image/jpeg" });
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                photoInput.files = dataTransfer.files;
+                
+                // Show preview
+                preview.src = canvas.toDataURL('image/jpeg');
+                preview.style.display = 'block';
+                video.style.display = 'none';
+                
+                // Update buttons
+                captureButton.classList.add('hidden');
+                retakeButton.classList.remove('hidden');
+                submitButton.disabled = false;
+                
+                // Stop camera stream
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+            }, 'image/jpeg', 0.9);
+        });
+
+        retakeButton.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: "user",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                video.srcObject = stream;
+                
+                // Reset UI
+                video.style.display = 'block';
+                preview.style.display = 'none';
+                captureButton.classList.remove('hidden');
+                retakeButton.classList.add('hidden');
+                submitButton.disabled = true;
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                alert('Error accessing camera. Please make sure you have granted camera permissions.');
+            }
+        });
+
+        // Form submission
+        document.getElementById('recognitionForm').addEventListener('submit', function(e) {
+            if (!photoInput.files.length) {
+                e.preventDefault();
+                alert('Please capture a photo before submitting.');
+            }
+        });
+    </script>
 </body>
 </html>
