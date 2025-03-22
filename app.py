@@ -44,8 +44,11 @@ def upload():
         workforce_id = request.form['workforce_id']
         photo = request.files['photo']
         
+        if not photo:
+            return render_template('error.html', error="No photo provided")
+            
         # Save the uploaded file temporarily
-        photo_path = os.path.join('static', photo.filename)
+        photo_path = os.path.join('static', 'captured_photo.jpg')
         photo.save(photo_path)
         
         # Read the image file
@@ -103,16 +106,3 @@ def upload():
     except Exception as e:
         return render_template('error.html',
                              error=f"Application Error: {str(e)}")
-
-# Error handlers
-@app.errorhandler(404)
-def not_found_error(error):
-    return render_template('error.html', error='Page not found'), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    return render_template('error.html', error='Internal server error'), 500
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
