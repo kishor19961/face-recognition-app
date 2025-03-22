@@ -75,7 +75,6 @@
             <video id="video" autoplay playsinline></video>
             <canvas id="canvas"></canvas>
             <img id="preview" alt="Captured photo">
-            <input type="hidden" id="photo" name="photo">
             
             <div class="camera-buttons">
                 <button type="button" id="startCamera">Start Camera</button>
@@ -84,6 +83,7 @@
             </div>
         </div>
         
+        <input type="hidden" name="photo" id="photoInput">
         <button type="submit" id="submitButton" disabled>Submit</button>
     </form>
 
@@ -96,7 +96,7 @@
         const captureButton = document.getElementById('capturePhoto');
         const retakeButton = document.getElementById('retakePhoto');
         const submitButton = document.getElementById('submitButton');
-        const photoInput = document.getElementById('photo');
+        const photoInput = document.getElementById('photoInput');
 
         startButton.addEventListener('click', async () => {
             try {
@@ -110,6 +110,8 @@
                 video.srcObject = stream;
                 startButton.disabled = true;
                 captureButton.disabled = false;
+                video.style.display = 'block';
+                preview.style.display = 'none';
             } catch (err) {
                 console.error('Error accessing camera:', err);
                 alert('Error accessing camera. Please make sure you have granted camera permissions.');
@@ -121,28 +123,24 @@
             canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
             
-            // Convert canvas to blob and create a file
-            canvas.toBlob((blob) => {
-                const file = new File([blob], "captured-photo.jpg", { type: "image/jpeg" });
-                const dataTransfer = new DataTransfer();
-                dataTransfer.items.add(file);
-                photoInput.files = dataTransfer.files;
-                
-                // Show preview
-                preview.src = canvas.toDataURL('image/jpeg');
-                preview.style.display = 'block';
-                video.style.display = 'none';
-                
-                // Update buttons
-                captureButton.classList.add('hidden');
-                retakeButton.classList.remove('hidden');
-                submitButton.disabled = false;
-                
-                // Stop camera stream
-                if (stream) {
-                    stream.getTracks().forEach(track => track.stop());
-                }
-            }, 'image/jpeg', 0.9);
+            // Convert canvas to base64
+            const imageData = canvas.toDataURL('image/jpeg', 0.9);
+            photoInput.value = imageData;
+            
+            // Show preview
+            preview.src = imageData;
+            preview.style.display = 'block';
+            video.style.display = 'none';
+            
+            // Update buttons
+            captureButton.classList.add('hidden');
+            retakeButton.classList.remove('hidden');
+            submitButton.disabled = false;
+            
+            // Stop camera stream
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
         });
 
         retakeButton.addEventListener('click', async () => {
@@ -162,6 +160,7 @@
                 captureButton.classList.remove('hidden');
                 retakeButton.classList.add('hidden');
                 submitButton.disabled = true;
+                photoInput.value = '';
             } catch (err) {
                 console.error('Error accessing camera:', err);
                 alert('Error accessing camera. Please make sure you have granted camera permissions.');
@@ -170,9 +169,10 @@
 
         // Form submission
         document.getElementById('recognitionForm').addEventListener('submit', function(e) {
-            if (!photoInput.files.length) {
+            if (!photoInput.value) {
                 e.preventDefault();
                 alert('Please capture a photo before submitting.');
+                return;
             }
         });
     </script>
