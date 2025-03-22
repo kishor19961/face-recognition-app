@@ -1,59 +1,24 @@
-from flask import Flask, request, render_template, redirect, url_for
-import boto3
-import os
-import base64
-from botocore.exceptions import ClientError
-
-# Create the application instance
-app = Flask(__name__,
-            template_folder='templates',
-            static_folder='static')
-
-# Initialize AWS clients with environment variables
-rekognition = boto3.client(
-    'rekognition',
-    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-    region_name=os.environ.get('AWS_REGION', 'us-east-1')
-)
-
-s3 = boto3.client(
-    's3',
-    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-    region_name=os.environ.get('AWS_REGION', 'us-east-1')
-)
-
-BUCKET_NAME = os.environ.get('S3_BUCKET_NAME', 'newawignbucket')
-
-# Ensure static directory exists
-os.makedirs('static', exist_ok=True)
-
-@app.route('/')
-def home():
-    try:
-        return render_template('index.html')
-    except Exception as e:
-        print(f"Error rendering template: {str(e)}")
-        return str(e), 500
-
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
         guard_id = request.form['guard_id']
         workforce_id = request.form['workforce_id']
-        photo = request.files['photo']
+        photo_data = request.form['photo']
         
-        if not photo:
+        if not photo_data:
             return render_template('error.html', error="No photo provided")
-            
-        # Save the uploaded file temporarily
-        photo_path = os.path.join('static', 'captured_photo.jpg')
-        photo.save(photo_path)
         
-        # Read the image file
-        with open(photo_path, 'rb') as image_file:
-            image_bytes = image_file.read()
+        # Remove the data URL prefix to get just the base64 data
+        if 'base64,' in photo_data:
+            photo_data = photo_data.split('base64,')[1]
+            
+        # Decode base64 to bytes
+        image_bytes = base64.b64decode(photo_data)
+        
+        # Save the image temporarily
+        photo_path = os.path.join('static', 'captured_photo.jpg')
+        with open(photo_path, 'wb') as f:
+            f.write(image_bytes)
         
         try:
             # Search for similar faces in the S3 bucket
@@ -84,10 +49,6 @@ def upload():
                 confidence = 0
                 metadata = {}
             
-            # Convert the captured image to base64 for display
-            with open(photo_path, 'rb') as image_file:
-                encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
-            
             # Clean up the temporary file
             os.remove(photo_path)
             
@@ -97,7 +58,7 @@ def upload():
                                 workforce_id=workforce_id,
                                 confidence=confidence,
                                 metadata=metadata,
-                                captured_image=encoded_image)
+                                captured_image=photo_data)
                                 
         except ClientError as e:
             return render_template('error.html', 
