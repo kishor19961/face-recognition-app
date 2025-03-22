@@ -2,21 +2,32 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Face Recognition</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
+            margin: 0;
+            padding: 10px;
             background-color: #f5f5f5;
+            min-height: 100vh;
         }
         .container {
             background-color: white;
-            padding: 25px;
+            padding: 15px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 100%;
+            margin: 0 auto;
+        }
+        @media (min-width: 768px) {
+            .container {
+                max-width: 800px;
+                padding: 25px;
+            }
+            body {
+                padding: 20px;
+            }
         }
         .form-group {
             margin-bottom: 15px;
@@ -28,12 +39,12 @@
             font-weight: 500;
         }
         input {
-            padding: 10px;
+            padding: 12px;
             width: 100%;
-            max-width: 300px;
             border: 1px solid #ddd;
             border-radius: 4px;
             box-sizing: border-box;
+            font-size: 16px; /* Better for mobile tapping */
         }
         input:focus {
             outline: none;
@@ -42,10 +53,12 @@
         }
         #camera-container {
             margin: 15px 0;
-            max-width: 400px;
+            width: 100%;
         }
         #video {
             width: 100%;
+            max-height: 70vh;
+            object-fit: cover;
             border-radius: 4px;
             margin-bottom: 10px;
             background-color: #f8f8f8;
@@ -54,7 +67,9 @@
             display: none;
         }
         #preview {
-            max-width: 100%;
+            width: 100%;
+            max-height: 70vh;
+            object-fit: contain;
             border-radius: 4px;
             margin: 10px 0;
             display: none;
@@ -66,14 +81,24 @@
             flex-wrap: wrap;
         }
         button {
-            padding: 10px 20px;
+            padding: 12px 20px;
             background-color: #4CAF50;
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 16px;
             transition: background-color 0.3s;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            width: 100%;
+            margin-bottom: 8px;
+        }
+        @media (min-width: 480px) {
+            button {
+                width: auto;
+                margin-bottom: 0;
+            }
         }
         button:hover {
             background-color: #45a049;
@@ -86,6 +111,12 @@
             margin: 10px 0;
             display: flex;
             gap: 10px;
+            flex-direction: column;
+        }
+        @media (min-width: 480px) {
+            .camera-buttons {
+                flex-direction: row;
+            }
         }
         .hidden {
             display: none;
@@ -94,12 +125,44 @@
             color: #333;
             margin-bottom: 20px;
             text-align: center;
+            font-size: 24px;
         }
         .user-info {
-            text-align: right;
-            margin-bottom: 20px;
-            font-size: 14px;
+            background-color: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 13px;
             color: #666;
+        }
+        .user-info div {
+            margin-bottom: 4px;
+        }
+        .user-info div:last-child {
+            margin-bottom: 0;
+        }
+        
+        /* Fullscreen video when in landscape */
+        @media (orientation: landscape) {
+            .container {
+                padding: 10px;
+            }
+            #camera-container {
+                margin: 10px 0;
+            }
+            #video, #preview {
+                max-height: 85vh;
+            }
+            .form-group {
+                margin-bottom: 10px;
+            }
+            .user-info {
+                margin-bottom: 10px;
+            }
+            h1 {
+                margin: 10px 0;
+                font-size: 20px;
+            }
         }
     </style>
 </head>
@@ -115,12 +178,12 @@
         <form id="recognitionForm" action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
             <div class="form-group">
                 <label for="guard_id">Guard ID:</label>
-                <input type="text" id="guard_id" name="guard_id" required>
+                <input type="text" id="guard_id" name="guard_id" required autocomplete="off">
             </div>
             
             <div class="form-group">
                 <label for="workforce_id">Workforce ID:</label>
-                <input type="text" id="workforce_id" name="workforce_id" required>
+                <input type="text" id="workforce_id" name="workforce_id" required autocomplete="off">
             </div>
             
             <div id="camera-container">
@@ -151,26 +214,44 @@
         const submitButton = document.getElementById('submitButton');
         const photoInput = document.getElementById('photoInput');
 
+        // Request fullscreen for better camera experience
+        function requestFullscreen(element) {
+            if (element.requestFullscreen) {
+                element.requestFullscreen();
+            } else if (element.webkitRequestFullscreen) {
+                element.webkitRequestFullscreen();
+            } else if (element.mozRequestFullScreen) {
+                element.mozRequestFullScreen();
+            } else if (element.msRequestFullscreen) {
+                element.msRequestFullscreen();
+            }
+        }
+
         async function initCamera(isRetry = false) {
             try {
-                stream = await navigator.mediaDevices.getUserMedia({
+                const constraints = {
                     video: {
                         facingMode: { exact: "environment" },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
                     }
-                });
+                };
+
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
+                
+                // Optional: Request fullscreen for better camera experience
+                // video.addEventListener('playing', () => {
+                //     requestFullscreen(video);
+                // });
+                
                 return true;
             } catch (err) {
                 console.error('Error accessing back camera:', err);
                 if (!isRetry) {
                     try {
                         stream = await navigator.mediaDevices.getUserMedia({
-                            video: {
-                                width: { ideal: 1280 },
-                                height: { ideal: 720 }
-                            }
+                            video: true
                         });
                         video.srcObject = stream;
                         return true;
