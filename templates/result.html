@@ -28,14 +28,28 @@
         .match-false {
             color: red;
         }
-        .captured-image {
-            max-width: 300px;
+        .image-container {
+            display: flex;
+            justify-content: space-between;
             margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .image-box {
+            flex: 0 1 48%;
+            margin-bottom: 20px;
+        }
+        .image-box img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
         }
         .metadata {
             background-color: #f5f5f5;
             padding: 15px;
             border-radius: 5px;
+            margin-top: 20px;
         }
         .back-button {
             margin-top: 20px;
@@ -46,6 +60,10 @@
             cursor: pointer;
             text-decoration: none;
             display: inline-block;
+        }
+        h3 {
+            color: #333;
+            margin-top: 15px;
         }
     </style>
 </head>
@@ -65,11 +83,22 @@
         <p>Confidence: {{ "%.2f"|format(confidence) }}%</p>
         {% endif %}
         
-        <h2>Captured Image:</h2>
-        <img src="data:image/jpeg;base64,{{ captured_image }}" alt="Captured Image" class="captured-image">
+        <div class="image-container">
+            <div class="image-box">
+                <h3>Captured Image:</h3>
+                <img src="data:image/jpeg;base64,{{ captured_image }}" alt="Captured Image">
+            </div>
+            
+            {% if match and matched_image %}
+            <div class="image-box">
+                <h3>Matched Image from Database:</h3>
+                <img src="data:image/jpeg;base64,{{ matched_image }}" alt="Matched Image">
+            </div>
+            {% endif %}
+        </div>
         
         {% if metadata %}
-        <h2>Metadata:</h2>
+        <h2>Metadata from Matched Image:</h2>
         <div class="metadata">
             {% for key, value in metadata.items() %}
             <p><strong>{{ key }}:</strong> {{ value }}</p>
