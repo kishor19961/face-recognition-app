@@ -77,13 +77,13 @@ def upload():
                 logger.info(f"Match found! Face ID: {face_id}, External Image ID: {external_image_id}, Confidence: {confidence}")
                 
                 try:
-                    # Try different possible S3 keys
+                    # Try different possible S3 keys based on the actual structure
                     possible_keys = [
-                        f"{face_id}.jpg",
-                        f"{external_image_id}.jpg",
-                        external_image_id,  # in case it already includes the extension
-                        f"faces/{face_id}.jpg",
-                        f"faces/{external_image_id}.jpg"
+                        f"index/{external_image_id}.jpg",        # index/Darshan1.jpg
+                        f"index/{external_image_id}.jpg.jpg",    # index/Darshan1.jpg.jpg
+                        f"index/{external_image_id}",            # index/Darshan1
+                        f"{external_image_id}.jpg",              # Darshan1.jpg
+                        f"{external_image_id}.jpg.jpg"           # Darshan1.jpg.jpg
                     ]
                     
                     matched_image_base64 = None
@@ -112,13 +112,13 @@ def upload():
                             logger.info(f"Key {s3_key} not found, trying next...")
                             continue
                     
-                    # If no image was found, add face information to metadata
-                    if not metadata:
-                        metadata = {
-                            'FaceId': face_id,
-                            'ExternalImageId': external_image_id,
-                            'Confidence': str(confidence)
-                        }
+                    # Add face information to metadata
+                    metadata.update({
+                        'FaceId': face_id,
+                        'ExternalImageId': external_image_id,
+                        'Confidence': str(confidence),
+                        'MatchConfidence': f"{confidence:.2f}%"
+                    })
                         
                 except ClientError as e:
                     logger.error(f"Error accessing S3: {str(e)}")
