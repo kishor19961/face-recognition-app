@@ -4,7 +4,10 @@ import os
 import base64
 from botocore.exceptions import ClientError
 
-app = Flask(__name__)
+# Create the application instance
+app = Flask(__name__,
+            template_folder='templates',  # Add this line
+            static_folder='static')       # Add this line
 
 # Initialize AWS clients with environment variables
 rekognition = boto3.client(
@@ -23,7 +26,19 @@ s3 = boto3.client(
 
 BUCKET_NAME = os.environ.get('S3_BUCKET_NAME', 'newawignbucket')
 
+# Ensure static directory exists
+os.makedirs('static', exist_ok=True)
+
+@app.route('/')
+def home():
+    try:
+        return render_template('index.html')
+    except Exception as e:
+        print(f"Error rendering template: {str(e)}")
+        return str(e), 500
+
 # Rest of your code remains the same...
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
