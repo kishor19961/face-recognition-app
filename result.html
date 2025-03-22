@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Face Recognition Result</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .result-container {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .match-status {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .match-true {
+            color: green;
+        }
+        .match-false {
+            color: red;
+        }
+        .captured-image {
+            max-width: 300px;
+            margin: 20px 0;
+        }
+        .metadata {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .back-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <h1>Face Recognition Result</h1>
+    
+    <div class="result-container">
+        <div class="match-status {% if match %}match-true{% else %}match-false{% endif %}">
+            Match Status: {{ 'MATCH FOUND' if match else 'NO MATCH FOUND' }}
+        </div>
+        
+        <h2>Submitted Information:</h2>
+        <p>Guard ID: {{ guard_id }}</p>
+        <p>Workforce ID: {{ workforce_id }}</p>
+        
+        {% if match %}
+        <p>Confidence: {{ "%.2f"|format(confidence) }}%</p>
+        {% endif %}
+        
+        <h2>Captured Image:</h2>
+        <img src="data:image/jpeg;base64,{{ captured_image }}" alt="Captured Image" class="captured-image">
+        
+        {% if metadata %}
+        <h2>Metadata:</h2>
+        <div class="metadata">
+            {% for key, value in metadata.items() %}
+            <p><strong>{{ key }}:</strong> {{ value }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    
+    <a href="{{ url_for('home') }}" class="back-button">Back to Form</a>
+</body>
+</html>

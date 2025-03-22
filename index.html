@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Face Recognition</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input {
+            padding: 8px;
+            width: 100%;
+            max-width: 300px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Face Recognition Form</h1>
+    <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="guard_id">Guard ID:</label>
+            <input type="text" id="guard_id" name="guard_id" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="workforce_id">Workforce ID:</label>
+            <input type="text" id="workforce_id" name="workforce_id" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="photo">Capture Photo:</label>
+            <input type="file" id="photo" name="photo" accept="image/*" capture="camera" required>
+        </div>
+        
+        <button type="submit">Submit</button>
+    </form>
+</body>
+</html>
