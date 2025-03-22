@@ -1,10 +1,144 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- ... (keep the existing head and style sections the same) ... -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Recognition</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 500;
+        }
+        input {
+            padding: 10px;
+            width: 100%;
+            max-width: 300px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76,175,80,0.2);
+        }
+        #camera-container {
+            margin: 15px 0;
+            max-width: 400px;
+        }
+        #video {
+            width: 100%;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            background-color: #f8f8f8;
+        }
+        #canvas {
+            display: none;
+        }
+        #preview {
+            max-width: 100%;
+            border-radius: 4px;
+            margin: 10px 0;
+            display: none;
+        }
+        .button-group {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .camera-buttons {
+            margin: 10px 0;
+            display: flex;
+            gap: 10px;
+        }
+        .hidden {
+            display: none;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .user-info {
+            text-align: right;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
 </head>
 <body>
-    <!-- ... (keep the existing HTML structure the same until the script section) ... -->
+    <div class="container">
+        <div class="user-info">
+            <div>Current Date and Time (UTC): {{ current_datetime }}</div>
+            <div>User: {{ current_user }}</div>
+        </div>
+        
+        <h1>Face Recognition</h1>
+        
+        <form id="recognitionForm" action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="guard_id">Guard ID:</label>
+                <input type="text" id="guard_id" name="guard_id" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="workforce_id">Workforce ID:</label>
+                <input type="text" id="workforce_id" name="workforce_id" required>
+            </div>
+            
+            <div id="camera-container">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="canvas"></canvas>
+                <img id="preview" alt="Captured photo">
+                <input type="hidden" name="photo" id="photoInput">
+                
+                <div class="camera-buttons">
+                    <button type="button" id="startCamera">Start Camera</button>
+                    <button type="button" id="capturePhoto" disabled>Capture Photo</button>
+                    <button type="button" id="retakePhoto" class="hidden">Retake Photo</button>
+                </div>
+            </div>
+            
+            <button type="submit" id="submitButton" disabled>Submit</button>
+        </form>
+    </div>
 
     <script>
         let stream = null;
@@ -17,113 +151,80 @@
         const submitButton = document.getElementById('submitButton');
         const photoInput = document.getElementById('photoInput');
 
-        startButton.addEventListener('click', async () => {
+        async function initCamera(isRetry = false) {
             try {
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: { exact: "environment" }, // This specifies the back camera
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: { exact: "environment" },
                         width: { ideal: 1280 },
                         height: { ideal: 720 }
-                    } 
+                    }
                 });
                 video.srcObject = stream;
+                return true;
+            } catch (err) {
+                console.error('Error accessing back camera:', err);
+                if (!isRetry) {
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({
+                            video: {
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
+                            }
+                        });
+                        video.srcObject = stream;
+                        return true;
+                    } catch (fallbackErr) {
+                        console.error('Error accessing any camera:', fallbackErr);
+                        alert('Error accessing camera. Please make sure you have granted camera permissions.');
+                        return false;
+                    }
+                }
+                return false;
+            }
+        }
+
+        startButton.addEventListener('click', async () => {
+            if (await initCamera()) {
                 startButton.disabled = true;
                 captureButton.disabled = false;
                 video.style.display = 'block';
                 preview.style.display = 'none';
-            } catch (err) {
-                console.error('Error accessing camera:', err);
-                // If back camera fails, try falling back to any available camera
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { 
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
-                        } 
-                    });
-                    video.srcObject = stream;
-                    startButton.disabled = true;
-                    captureButton.disabled = false;
-                    video.style.display = 'block';
-                    preview.style.display = 'none';
-                } catch (fallbackErr) {
-                    console.error('Error accessing any camera:', fallbackErr);
-                    alert('Error accessing camera. Please make sure you have granted camera permissions and have a camera available.');
-                }
             }
         });
 
         retakeButton.addEventListener('click', async () => {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: { exact: "environment" }, // This specifies the back camera
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    } 
-                });
-                video.srcObject = stream;
-                
-                // Reset UI
+            if (await initCamera()) {
                 video.style.display = 'block';
                 preview.style.display = 'none';
                 captureButton.classList.remove('hidden');
                 retakeButton.classList.add('hidden');
                 submitButton.disabled = true;
                 photoInput.value = '';
-            } catch (err) {
-                console.error('Error accessing camera:', err);
-                // If back camera fails, try falling back to any available camera
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { 
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
-                        } 
-                    });
-                    video.srcObject = stream;
-                    
-                    // Reset UI
-                    video.style.display = 'block';
-                    preview.style.display = 'none';
-                    captureButton.classList.remove('hidden');
-                    retakeButton.classList.add('hidden');
-                    submitButton.disabled = true;
-                    photoInput.value = '';
-                } catch (fallbackErr) {
-                    console.error('Error accessing any camera:', fallbackErr);
-                    alert('Error accessing camera. Please make sure you have granted camera permissions and have a camera available.');
-                }
             }
         });
 
-        // Keep the existing captureButton event listener
         captureButton.addEventListener('click', () => {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
             
-            // Convert canvas to base64
             const imageData = canvas.toDataURL('image/jpeg', 0.9);
             photoInput.value = imageData;
             
-            // Show preview
             preview.src = imageData;
             preview.style.display = 'block';
             video.style.display = 'none';
             
-            // Update buttons
             captureButton.classList.add('hidden');
             retakeButton.classList.remove('hidden');
             submitButton.disabled = false;
             
-            // Stop camera stream
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
             }
         });
 
-        // Keep the existing form submission event listener
         document.getElementById('recognitionForm').addEventListener('submit', function(e) {
             if (!photoInput.value) {
                 e.preventDefault();
