@@ -34,7 +34,10 @@ def list_files_in_bucket():
             Bucket=BUCKET_NAME,
             Prefix='index/'
         )
-        return [item['Key'] for item in response.get('Contents', [])]
+        # Filter out the directory entry and return only files
+        files = [item['Key'] for item in response.get('Contents', []) 
+                if not item['Key'].endswith('/')]
+        return files
     except Exception as e:
         logger.error(f"Error listing bucket contents: {str(e)}")
         return []
@@ -86,6 +89,7 @@ def upload():
                 confidence = response['FaceMatches'][0]['Similarity']
                 face_id = response['FaceMatches'][0]['Face']['FaceId']
                 image_id = response['FaceMatches'][0]['Face']['ImageId']
+                external_image_id = response['FaceMatches'][0]['Face']['ExternalImageId']
                 
                 try:
                     # List all files in the bucket's index folder
@@ -96,12 +100,18 @@ def upload():
                     metadata = {}
                     s3_key = None
                     
-                    # Try to find the matching file
-                    if s3_files:
-                        # Use the first file found in the index folder
-                        s3_key = s3_files[0]
-                        logger.info(f"Using S3 key: {s3_key}")
+                    # Find the matching file based on ExternalImageId
+                    for file_key in s3_files:
+                        base_name = os.path.splitext(os.path.basename(file_key))[0]
+                        # Remove .jpg if it's part of the base name
+                        base_name = base_name.replace('.jpg', '')
                         
+                        if base_name.lower() == external_image_id.lower().replace('1', ''):
+                            s3_key = file_key
+                            break
+                    
+                    if s3_key:
+                        logger.info(f"Found matching file: {s3_key}")
                         try:
                             # Get metadata and image
                             metadata_response = s3.head_object(
@@ -121,12 +131,15 @@ def upload():
                             
                         except ClientError as e:
                             logger.error(f"Error accessing S3 object: {str(e)}")
+                    else:
+                        logger.error("No matching file found in S3")
                     
                     # Add face information to metadata
                     metadata.update({
                         'FaceId': face_id,
                         'ImageId': image_id,
-                        'S3Key': s3_key,
+                        'ExternalImageId': external_image_id,
+                        'S3Key': s3_key if s3_key else 'Not found',
                         'MatchConfidence': f"{confidence:.2f}%"
                     })
                         
@@ -135,6 +148,7 @@ def upload():
                     metadata = {
                         'FaceId': face_id,
                         'ImageId': image_id,
+                        'ExternalImageId': external_image_id,
                         'Confidence': str(confidence),
                         'Note': 'Original image not found in S3'
                     }
