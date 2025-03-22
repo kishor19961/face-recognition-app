@@ -3,6 +3,7 @@ import boto3
 import os
 import base64
 from botocore.exceptions import ClientError
+import io
 
 # Create the application instance
 app = Flask(__name__,
@@ -54,11 +55,6 @@ def upload():
         # Decode base64 to bytes
         image_bytes = base64.b64decode(photo_data)
         
-        # Save the image temporarily
-        photo_path = os.path.join('static', 'captured_photo.jpg')
-        with open(photo_path, 'wb') as f:
-            f.write(image_bytes)
-        
         try:
             # Search for similar faces in the S3 bucket
             response = rekognition.search_faces_by_image(
@@ -76,20 +72,30 @@ def upload():
                 face_id = response['FaceMatches'][0]['Face']['FaceId']
                 
                 try:
+                    # Get metadata and image from S3
+                    s3_key = f"{face_id}.jpg"
                     metadata_response = s3.head_object(
                         Bucket=BUCKET_NAME,
-                        Key=f"{face_id}.jpg"
+                        Key=s3_key
                     )
                     metadata = metadata_response.get('Metadata', {})
-                except ClientError:
+                    
+                    # Get the matched image from S3
+                    s3_response = s3.get_object(
+                        Bucket=BUCKET_NAME,
+                        Key=s3_key
+                    )
+                    matched_image_bytes = s3_response['Body'].read()
+                    matched_image_base64 = base64.b64encode(matched_image_bytes).decode('utf-8')
+                    
+                except ClientError as e:
                     metadata = {}
+                    matched_image_base64 = None
             else:
                 match = False
                 confidence = 0
                 metadata = {}
-            
-            # Clean up the temporary file
-            os.remove(photo_path)
+                matched_image_base64 = None
             
             return render_template('result.html',
                                 match=match,
@@ -97,7 +103,8 @@ def upload():
                                 workforce_id=workforce_id,
                                 confidence=confidence,
                                 metadata=metadata,
-                                captured_image=photo_data)
+                                captured_image=photo_data,
+                                matched_image=matched_image_base64)
                                 
         except ClientError as e:
             return render_template('error.html', 
@@ -106,3 +113,16 @@ def upload():
     except Exception as e:
         return render_template('error.html',
                              error=f"Application Error: {str(e)}")
+
+# Error handlers
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('error.html', error='Page not found'), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return render_template('error.html', error='Internal server error'), 500
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
