@@ -1,193 +1,135 @@
-from flask import Flask, request, render_template, redirect, url_for
-import boto3
-import os
-import base64
-from botocore.exceptions import ClientError
-import logging
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- ... (keep the existing head and style sections the same) ... -->
+</head>
+<body>
+    <!-- ... (keep the existing HTML structure the same until the script section) ... -->
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+    <script>
+        let stream = null;
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const preview = document.getElementById('preview');
+        const startButton = document.getElementById('startCamera');
+        const captureButton = document.getElementById('capturePhoto');
+        const retakeButton = document.getElementById('retakePhoto');
+        const submitButton = document.getElementById('submitButton');
+        const photoInput = document.getElementById('photoInput');
 
-# Create the application instance
-app = Flask(__name__,
-            template_folder='templates',
-            static_folder='static')
+        startButton.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: { exact: "environment" }, // This specifies the back camera
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                video.srcObject = stream;
+                startButton.disabled = true;
+                captureButton.disabled = false;
+                video.style.display = 'block';
+                preview.style.display = 'none';
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                // If back camera fails, try falling back to any available camera
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { 
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        } 
+                    });
+                    video.srcObject = stream;
+                    startButton.disabled = true;
+                    captureButton.disabled = false;
+                    video.style.display = 'block';
+                    preview.style.display = 'none';
+                } catch (fallbackErr) {
+                    console.error('Error accessing any camera:', fallbackErr);
+                    alert('Error accessing camera. Please make sure you have granted camera permissions and have a camera available.');
+                }
+            }
+        });
 
-# Initialize AWS clients with environment variables
-def get_aws_credentials():
-    return {
-        'aws_access_key_id': os.environ.get('AWS_ACCESS_KEY_ID'),
-        'aws_secret_access_key': os.environ.get('AWS_SECRET_ACCESS_KEY'),
-        'region_name': os.environ.get('AWS_REGION', 'us-east-1')
-    }
-
-rekognition = boto3.client('rekognition', **get_aws_credentials())
-s3 = boto3.client('s3', **get_aws_credentials())
-
-BUCKET_NAME = os.environ.get('S3_BUCKET_NAME', 'newawignbucket')
-
-def get_all_faces_in_collection():
-    """Get all faces from the Rekognition collection"""
-    try:
-        faces = []
-        paginator = rekognition.get_paginator('list_faces')
-        for page in paginator.paginate(CollectionId='facerecognition_collection'):
-            faces.extend(page['Faces'])
-        return faces
-    except Exception as e:
-        logger.error(f"Error getting faces from collection: {str(e)}")
-        return []
-
-@app.route('/')
-def home():
-    try:
-        return render_template('index.html')
-    except Exception as e:
-        logger.error(f"Error rendering template: {str(e)}")
-        return str(e), 500
-
-@app.route('/upload', methods=['POST'])
-def upload():
-    try:
-        guard_id = request.form['guard_id']
-        workforce_id = request.form['workforce_id']
-        photo_data = request.form['photo']
-        
-        logger.info(f"Received upload request for Guard ID: {guard_id}, Workforce ID: {workforce_id}")
-        
-        if not photo_data:
-            logger.error("No photo data received")
-            return render_template('error.html', error="No photo provided")
-        
-        # Remove the data URL prefix to get just the base64 data
-        if 'base64,' in photo_data:
-            photo_data = photo_data.split('base64,')[1]
-            
-        # Decode base64 to bytes
-        image_bytes = base64.b64decode(photo_data)
-        
-        try:
-            # Search for similar faces in the collection
-            logger.info("Searching for similar faces...")
-            response = rekognition.search_faces_by_image(
-                CollectionId='facerecognition_collection',
-                Image={
-                    'Bytes': image_bytes
-                },
-                MaxFaces=1,
-                FaceMatchThreshold=70
-            )
-            
-            logger.info(f"Rekognition response: {response}")
-            
-            if response['FaceMatches']:
-                match = True
-                confidence = response['FaceMatches'][0]['Similarity']
-                face_id = response['FaceMatches'][0]['Face']['FaceId']
+        retakeButton.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: { exact: "environment" }, // This specifies the back camera
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                video.srcObject = stream;
                 
-                try:
-                    # List objects in the S3 bucket's index folder
-                    response = s3.list_objects_v2(
-                        Bucket=BUCKET_NAME,
-                        Prefix='index/'
-                    )
+                // Reset UI
+                video.style.display = 'block';
+                preview.style.display = 'none';
+                captureButton.classList.remove('hidden');
+                retakeButton.classList.add('hidden');
+                submitButton.disabled = true;
+                photoInput.value = '';
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                // If back camera fails, try falling back to any available camera
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { 
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        } 
+                    });
+                    video.srcObject = stream;
                     
-                    s3_files = [item['Key'] for item in response.get('Contents', []) 
-                              if not item['Key'].endswith('/')]
-                    logger.info(f"Files in S3 bucket: {s3_files}")
-                    
-                    matched_image_base64 = None
-                    metadata = {}
-                    
-                    # Try each file in S3
-                    for s3_key in s3_files:
-                        try:
-                            # Get the image from S3
-                            s3_response = s3.get_object(
-                                Bucket=BUCKET_NAME,
-                                Key=s3_key
-                            )
-                            image_bytes = s3_response['Body'].read()
-                            
-                            # Detect faces in this S3 image
-                            detect_response = rekognition.detect_faces(
-                                Image={
-                                    'Bytes': image_bytes
-                                },
-                                Attributes=['DEFAULT']
-                            )
-                            
-                            if detect_response['FaceDetails']:
-                                # Search for faces in the collection that match this image
-                                search_response = rekognition.search_faces_by_image(
-                                    CollectionId='facerecognition_collection',
-                                    Image={
-                                        'Bytes': image_bytes
-                                    },
-                                    MaxFaces=1,
-                                    FaceMatchThreshold=70
-                                )
-                                
-                                if search_response['FaceMatches']:
-                                    matched_face_id = search_response['FaceMatches'][0]['Face']['FaceId']
-                                    
-                                    # If this image contains our target face
-                                    if matched_face_id == face_id:
-                                        logger.info(f"Found matching image: {s3_key}")
-                                        matched_image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-                                        
-                                        # Get metadata
-                                        metadata_response = s3.head_object(
-                                            Bucket=BUCKET_NAME,
-                                            Key=s3_key
-                                        )
-                                        metadata = metadata_response.get('Metadata', {})
-                                        metadata.update({
-                                            'FileName': s3_key,
-                                            'FaceId': face_id,
-                                            'MatchConfidence': f"{confidence:.2f}%"
-                                        })
-                                        break
-                            
-                        except ClientError as e:
-                            logger.error(f"Error processing {s3_key}: {str(e)}")
-                            continue
-                    
-                except ClientError as e:
-                    logger.error(f"Error accessing S3: {str(e)}")
-                    metadata = {
-                        'FaceId': face_id,
-                        'Confidence': str(confidence),
-                        'Note': 'Error accessing S3'
-                    }
-                    matched_image_base64 = None
-            else:
-                logger.info("No match found")
-                match = False
-                confidence = 0
-                metadata = {}
-                matched_image_base64 = None
-            
-            return render_template('result.html',
-                                match=match,
-                                guard_id=guard_id,
-                                workforce_id=workforce_id,
-                                confidence=confidence,
-                                metadata=metadata,
-                                captured_image=photo_data,
-                                matched_image=matched_image_base64)
-                                
-        except ClientError as e:
-            logger.error(f"AWS Error: {str(e)}")
-            return render_template('error.html', 
-                                error=f"AWS Error: {str(e)}")
-                                
-    except Exception as e:
-        logger.error(f"Application Error: {str(e)}")
-        return render_template('error.html',
-                             error=f"Application Error: {str(e)}")
+                    // Reset UI
+                    video.style.display = 'block';
+                    preview.style.display = 'none';
+                    captureButton.classList.remove('hidden');
+                    retakeButton.classList.add('hidden');
+                    submitButton.disabled = true;
+                    photoInput.value = '';
+                } catch (fallbackErr) {
+                    console.error('Error accessing any camera:', fallbackErr);
+                    alert('Error accessing camera. Please make sure you have granted camera permissions and have a camera available.');
+                }
+            }
+        });
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
+        // Keep the existing captureButton event listener
+        captureButton.addEventListener('click', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            // Convert canvas to base64
+            const imageData = canvas.toDataURL('image/jpeg', 0.9);
+            photoInput.value = imageData;
+            
+            // Show preview
+            preview.src = imageData;
+            preview.style.display = 'block';
+            video.style.display = 'none';
+            
+            // Update buttons
+            captureButton.classList.add('hidden');
+            retakeButton.classList.remove('hidden');
+            submitButton.disabled = false;
+            
+            // Stop camera stream
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        });
+
+        // Keep the existing form submission event listener
+        document.getElementById('recognitionForm').addEventListener('submit', function(e) {
+            if (!photoInput.value) {
+                e.preventDefault();
+                alert('Please capture a photo before submitting.');
+            }
+        });
+    </script>
+</body>
+</html>
