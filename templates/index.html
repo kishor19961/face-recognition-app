@@ -44,7 +44,7 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             box-sizing: border-box;
-            font-size: 16px; /* Better for mobile tapping */
+            font-size: 16px;
         }
         input:focus {
             outline: none;
@@ -142,7 +142,6 @@
             margin-bottom: 0;
         }
         
-        /* Fullscreen video when in landscape */
         @media (orientation: landscape) {
             .container {
                 padding: 10px;
@@ -214,7 +213,6 @@
         const submitButton = document.getElementById('submitButton');
         const photoInput = document.getElementById('photoInput');
 
-        // Request fullscreen for better camera experience
         function requestFullscreen(element) {
             if (element.requestFullscreen) {
                 element.requestFullscreen();
@@ -239,12 +237,6 @@
 
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
-                
-                // Optional: Request fullscreen for better camera experience
-                // video.addEventListener('playing', () => {
-                //     requestFullscreen(video);
-                // });
-                
                 return true;
             } catch (err) {
                 console.error('Error accessing back camera:', err);
