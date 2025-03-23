@@ -4,7 +4,6 @@ import os
 import base64
 from botocore.exceptions import ClientError
 import logging
-import datetime
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -28,14 +27,22 @@ s3 = boto3.client('s3', **get_aws_credentials())
 
 BUCKET_NAME = os.environ.get('S3_BUCKET_NAME', 'newawignbucket')
 
+def get_all_faces_in_collection():
+    """Get all faces from the Rekognition collection"""
+    try:
+        faces = []
+        paginator = rekognition.get_paginator('list_faces')
+        for page in paginator.paginate(CollectionId='facerecognition_collection'):
+            faces.extend(page['Faces'])
+        return faces
+    except Exception as e:
+        logger.error(f"Error getting faces from collection: {str(e)}")
+        return []
+
 @app.route('/')
 def home():
     try:
-        current_datetime = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-        current_user = 'kishor19961'
-        return render_template('index.html',
-                             current_datetime=current_datetime,
-                             current_user=current_user)
+        return render_template('index.html')
     except Exception as e:
         logger.error(f"Error rendering template: {str(e)}")
         return str(e), 500
@@ -51,10 +58,7 @@ def upload():
         
         if not photo_data:
             logger.error("No photo data received")
-            return render_template('result.html',
-                                error_message="No photo provided",
-                                guard_id=guard_id,
-                                workforce_id=workforce_id)
+            return render_template('error.html', error="No photo provided")
         
         # Remove the data URL prefix to get just the base64 data
         if 'base64,' in photo_data:
@@ -64,22 +68,8 @@ def upload():
         image_bytes = base64.b64decode(photo_data)
         
         try:
-            # First, detect if there are any faces in the image
-            detect_faces_response = rekognition.detect_faces(
-                Image={'Bytes': image_bytes},
-                Attributes=['DEFAULT']
-            )
-            
-            if not detect_faces_response['FaceDetails']:
-                logger.info("No faces detected in the image")
-                return render_template('result.html',
-                                    match=False,
-                                    guard_id=guard_id,
-                                    workforce_id=workforce_id,
-                                    captured_image=photo_data,
-                                    error_message="No face detected in the image")
-            
-            # If faces are detected, proceed with face search
+            # Search for similar faces in the collection
+            logger.info("Searching for similar faces...")
             response = rekognition.search_faces_by_image(
                 CollectionId='facerecognition_collection',
                 Image={
@@ -95,7 +85,6 @@ def upload():
                 match = True
                 confidence = response['FaceMatches'][0]['Similarity']
                 face_id = response['FaceMatches'][0]['Face']['FaceId']
-                external_image_id = response['FaceMatches'][0]['Face']['ExternalImageId']
                 
                 try:
                     # List objects in the S3 bucket's index folder
@@ -191,21 +180,13 @@ def upload():
                                 
         except ClientError as e:
             logger.error(f"AWS Error: {str(e)}")
-            error_message = "No face detected in the image" if "InvalidParameterException" in str(e) else str(e)
-            return render_template('result.html',
-                                match=False,
-                                guard_id=guard_id,
-                                workforce_id=workforce_id,
-                                captured_image=photo_data,
-                                error_message=error_message)
+            return render_template('error.html', 
+                                error=f"AWS Error: {str(e)}")
                                 
     except Exception as e:
         logger.error(f"Application Error: {str(e)}")
-        return render_template('result.html',
-                             match=False,
-                             guard_id=guard_id,
-                             workforce_id=workforce_id,
-                             error_message=str(e))
+        return render_template('error.html',
+                             error=f"Application Error: {str(e)}")
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
