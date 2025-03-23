@@ -2,111 +2,104 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Face Recognition Result</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .result-container {
-            margin-top: 20px;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-        .match-status {
-            font-size: 24px;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 20px;
-        }
-        .match-true {
-            color: green;
-        }
-        .match-false {
-            color: red;
-        }
-        .image-container {
-            display: flex;
-            justify-content: space-between;
-            margin: 20px 0;
-            flex-wrap: wrap;
-        }
-        .image-box {
-            flex: 0 1 48%;
-            margin-bottom: 20px;
-        }
-        .image-box img {
-            max-width: 100%;
-            height: auto;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 5px;
-        }
-        .metadata {
-            background-color: #f5f5f5;
+        /* Include all the styles from index.html and add: */
+        .result-message {
             padding: 15px;
-            border-radius: 5px;
-            margin-top: 20px;
+            border-radius: 4px;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
-        .back-button {
-            margin-top: 20px;
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
+
+        .error-message {
+            background-color: #ffebee;
+            color: #d32f2f;
+            border: 1px solid #ffcdd2;
         }
-        h3 {
-            color: #333;
-            margin-top: 15px;
+
+        .success-message {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+
+        .result-icon {
+            font-size: 24px;
+            line-height: 1;
+        }
+
+        .error-icon::before {
+            content: '❌';
+        }
+
+        .success-icon::before {
+            content: '✅';
         }
     </style>
 </head>
 <body>
-    <h1>Face Recognition Result</h1>
-    
-    <div class="result-container">
-        <div class="match-status {% if match %}match-true{% else %}match-false{% endif %}">
-            Match Status: {{ 'MATCH FOUND' if match else 'NO MATCH FOUND' }}
+    <div class="container">
+        <h1>Face Recognition Result</h1>
+        
+        {% if error_message %}
+        <div class="result-message error-message">
+            <span class="result-icon error-icon"></span>
+            <span>{{ error_message }}</span>
         </div>
-        
-        <h2>Submitted Information:</h2>
-        <p>Guard ID: {{ guard_id }}</p>
-        <p>Workforce ID: {{ workforce_id }}</p>
-        
+        {% endif %}
+
         {% if match %}
-        <p>Confidence: {{ "%.2f"|format(confidence) }}%</p>
+        <div class="result-message success-message">
+            <span class="result-icon success-icon"></span>
+            <span>Match found with {{ confidence }}% confidence!</span>
+        </div>
+        {% elif not error_message %}
+        <div class="result-message error-message">
+            <span class="result-icon error-icon"></span>
+            <span>No match found</span>
+        </div>
         {% endif %}
+
+        <!-- Rest of your result template -->
         
-        <div class="image-container">
-            <div class="image-box">
-                <h3>Captured Image:</h3>
-                <img src="data:image/jpeg;base64,{{ captured_image }}" alt="Captured Image">
-            </div>
-            
-            {% if match and matched_image %}
-            <div class="image-box">
-                <h3>Matched Image from Database:</h3>
-                <img src="data:image/jpeg;base64,{{ matched_image }}" alt="Matched Image">
-            </div>
-            {% endif %}
+        <div class="form-group">
+            <label>Guard ID:</label>
+            <span>{{ guard_id }}</span>
         </div>
         
+        <div class="form-group">
+            <label>Workforce ID:</label>
+            <span>{{ workforce_id }}</span>
+        </div>
+
+        {% if captured_image %}
+        <div class="form-group">
+            <label>Captured Image:</label>
+            <img src="data:image/jpeg;base64,{{ captured_image }}" alt="Captured photo" style="max-width: 100%; height: auto;">
+        </div>
+        {% endif %}
+
+        {% if matched_image %}
+        <div class="form-group">
+            <label>Matched Image:</label>
+            <img src="data:image/jpeg;base64,{{ matched_image }}" alt="Matched photo" style="max-width: 100%; height: auto;">
+        </div>
+        {% endif %}
+
         {% if metadata %}
-        <h2>Metadata from Matched Image:</h2>
-        <div class="metadata">
-            {% for key, value in metadata.items() %}
-            <p><strong>{{ key }}:</strong> {{ value }}</p>
-            {% endfor %}
+        <div class="form-group">
+            <label>Metadata:</label>
+            <pre>{{ metadata | tojson(indent=2) }}</pre>
         </div>
         {% endif %}
+
+        <div class="button-group">
+            <a href="{{ url_for('home') }}"><button type="button">Try Again</button></a>
+        </div>
     </div>
-    
-    <a href="{{ url_for('home') }}" class="back-button">Back to Form</a>
 </body>
 </html>
