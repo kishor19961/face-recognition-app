@@ -5,39 +5,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Face Recognition Result</title>
     <style>
-        /* Include all the styles from index.html and add: */
-        .result-message {
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .error-message {
+            color: #d32f2f;
+            background-color: #ffebee;
             padding: 15px;
             border-radius: 4px;
             margin: 10px 0;
             display: flex;
             align-items: center;
             gap: 10px;
-        }
-
-        .error-message {
-            background-color: #ffebee;
-            color: #d32f2f;
             border: 1px solid #ffcdd2;
         }
-
-        .success-message {
-            background-color: #e8f5e9;
-            color: #2e7d32;
-            border: 1px solid #c8e6c9;
-        }
-
-        .result-icon {
-            font-size: 24px;
-            line-height: 1;
-        }
-
         .error-icon::before {
             content: '❌';
+            font-size: 20px;
         }
-
-        .success-icon::before {
-            content: '✅';
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            margin: 10px 0;
         }
     </style>
 </head>
@@ -46,47 +63,31 @@
         <h1>Face Recognition Result</h1>
         
         {% if error_message %}
-        <div class="result-message error-message">
-            <span class="result-icon error-icon"></span>
+        <div class="error-message">
+            <span class="error-icon"></span>
             <span>{{ error_message }}</span>
         </div>
         {% endif %}
 
-        {% if match %}
-        <div class="result-message success-message">
-            <span class="result-icon success-icon"></span>
-            <span>Match found with {{ confidence }}% confidence!</span>
-        </div>
-        {% elif not error_message %}
-        <div class="result-message error-message">
-            <span class="result-icon error-icon"></span>
-            <span>No match found</span>
-        </div>
-        {% endif %}
-
-        <!-- Rest of your result template -->
-        
         <div class="form-group">
-            <label>Guard ID:</label>
-            <span>{{ guard_id }}</span>
+            <label>Guard ID: {{ guard_id }}</label>
         </div>
         
         <div class="form-group">
-            <label>Workforce ID:</label>
-            <span>{{ workforce_id }}</span>
+            <label>Workforce ID: {{ workforce_id }}</label>
         </div>
 
         {% if captured_image %}
         <div class="form-group">
-            <label>Captured Image:</label>
-            <img src="data:image/jpeg;base64,{{ captured_image }}" alt="Captured photo" style="max-width: 100%; height: auto;">
+            <label>Captured Image:</label><br>
+            <img src="data:image/jpeg;base64,{{ captured_image }}" alt="Captured photo">
         </div>
         {% endif %}
 
         {% if matched_image %}
         <div class="form-group">
-            <label>Matched Image:</label>
-            <img src="data:image/jpeg;base64,{{ matched_image }}" alt="Matched photo" style="max-width: 100%; height: auto;">
+            <label>Matched Image:</label><br>
+            <img src="data:image/jpeg;base64,{{ matched_image }}" alt="Matched photo">
         </div>
         {% endif %}
 
@@ -97,9 +98,7 @@
         </div>
         {% endif %}
 
-        <div class="button-group">
-            <a href="{{ url_for('home') }}"><button type="button">Try Again</button></a>
-        </div>
+        <a href="{{ url_for('home') }}"><button type="button">Try Again</button></a>
     </div>
 </body>
 </html>
